@@ -40,7 +40,7 @@ router.post(
   adminController.postEditProduct
 );
 
-// // // [POST] /admin//delete-product
-router.post("/delete-product", isAuth, adminController.postDeleteProduct);
+// [POST] /admin//delete-product
+router.delete("/product/:productId", isAuth, adminController.deleteProduct);
 
 export default { router };
