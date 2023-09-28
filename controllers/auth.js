@@ -4,6 +4,7 @@ import crypto from "crypto";
 import Mailjet from "node-mailjet";
 import { validationResult } from "express-validator";
 
+//Mailjet - sending email
 const mailjet = new Mailjet({
   apiKey: process.env.MJ_APIKEY_PUBLIC || "5f453b57b69003f11cdbd0d46c363385",
   apiSecret:
@@ -12,11 +13,15 @@ const mailjet = new Mailjet({
 
 const getLogin = (req, res, next) => {
   let message = req.flash("error");
+
   if (message.length > 0) {
+    //Has error
     message = message[0];
   } else {
+    //No error
     message = null;
   }
+
   res.render("auth/login", {
     path: "/login",
     pageTitle: "Login",
@@ -31,11 +36,15 @@ const getLogin = (req, res, next) => {
 
 const getSignup = (req, res, next) => {
   let message = req.flash("error");
+
   if (message.length > 0) {
+    //Has error
     message = message[0];
   } else {
+    //No error
     message = null;
   }
+
   res.render("auth/signup", {
     path: "/signup",
     pageTitle: "Signup",
@@ -44,10 +53,13 @@ const getSignup = (req, res, next) => {
     validationErrors: [],
   });
 };
+
 const postLogin = (req, res, next) => {
   const email = req.body.email;
   const password = req.body.password;
   const errors = validationResult(req);
+
+  //Has error
   if (!errors.isEmpty()) {
     console.log("here");
     return res.status(422).render("auth/login", {
@@ -58,6 +70,8 @@ const postLogin = (req, res, next) => {
       validationErrors: errors.array(),
     });
   }
+
+  //Fetching the user by email
   User.findOne({ email: email })
     .then((user) => {
       if (!user) {
@@ -69,6 +83,7 @@ const postLogin = (req, res, next) => {
           validationErrors: [],
         });
       }
+      //Comparing the password
       bcrypt
         .compare(password, user.password)
         .then((doMatch) => {
@@ -113,6 +128,7 @@ const postSignup = (req, res, next) => {
   const password = req.body.password;
   const errors = validationResult(req);
 
+  //Already exist the email
   if (!errors.isEmpty()) {
     console.log(errors.array());
     return res.status(422).render("auth/signup", {
@@ -128,6 +144,7 @@ const postSignup = (req, res, next) => {
     });
   }
 
+  //Creating a use
   bcrypt
     .hash(password, 12)
     .then((hashedPassword) => {
@@ -140,6 +157,8 @@ const postSignup = (req, res, next) => {
     })
     .then((result) => {
       res.redirect("/login");
+
+      //Sending an email
       const request = mailjet.post("send", { version: "v3.1" }).request({
         Messages: [
           {
@@ -162,7 +181,7 @@ const postSignup = (req, res, next) => {
 
       request
         .then((result) => {
-          console.log("result.body");
+          console.log(result.body);
         })
         .catch((err) => {
           const error = new Error(err);
@@ -187,17 +206,23 @@ const getReset = (req, res, next) => {
 };
 
 const postReset = (req, res, next) => {
+  //Creating a token
   crypto.randomBytes(32, (err, buffer) => {
     if (err) {
       return res.redirect("/reset");
     }
     const token = buffer.toString("hex");
+
+    //Fetching the user
     User.findOne({ email: req.body.email })
       .then((user) => {
         if (!user) {
+          //No user found
           req.flash("error", "No account with that email found");
           return res.redirect("/reset");
         } else {
+          //User found
+          //Set resetToken and expiration
           user.resetToken = token;
           user.resetTokenExpiration = Date.now() + 3600000;
           return user.save();
@@ -205,6 +230,7 @@ const postReset = (req, res, next) => {
       })
       .then((result) => {
         res.redirect("/");
+        //Sending an email
         const request = mailjet.post("send", { version: "v3.1" }).request({
           Messages: [
             {

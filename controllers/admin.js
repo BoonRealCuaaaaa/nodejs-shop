@@ -1,18 +1,15 @@
 import Product from "../model/product.js";
-import mongodb from "mongodb";
 import { validationResult } from "express-validator";
-import mongoose from "mongoose";
-const ObjectId = mongodb.ObjectId;
 import fileHelper from "../util/file.js";
 
 const getAddProduct = (req, res, next) => {
   res.render("admin/edit-product", {
     pageTitle: "Add Product",
     path: "/admin/add-product",
-    editing: false,
-    hasError: false,
+    editing: false,//Check edit or add product
+    hasError: false,//Keep previous data
     errorMessage: null,
-    validationErrors: [],
+    validationErrors: [],//Array of validation error of input field
   });
 };
 
@@ -38,6 +35,8 @@ const postAddProduct = (req, res, next) => {
   const price = req.body.price;
   const description = req.body.description;
 
+
+  //Wrong image format/no image
   if (!image) {
     return res.status(422).render("admin/edit-product", {
       pageTitle: "Add product",
@@ -48,13 +47,15 @@ const postAddProduct = (req, res, next) => {
         title: title,
         price: price,
         description: description,
-      },
+      }, //Previous data
       errorMessage: "Attached file is not an image",
       validationErrors: [],
     });
   }
+
   const errors = validationResult(req);
 
+  //Has error
   if (!errors.isEmpty()) {
     console.log(errors.array());
     return res.status(422).render("admin/edit-product", {
@@ -74,6 +75,7 @@ const postAddProduct = (req, res, next) => {
 
   const imageUrl = image.path;
 
+  //Creating new product
   const product = new Product({
     title: title,
     price: price,
@@ -82,6 +84,7 @@ const postAddProduct = (req, res, next) => {
     userId: req.user,
   });
 
+  //Save to DB
   product
     .save()
     .then((result) => {
@@ -100,13 +103,13 @@ const getEditProduct = (req, res, next) => {
   if (!editMode) {
     return res.redirect("/");
   }
+  //Fetching the product
   const prodId = req.params.productId;
   Product.findById(prodId)
     .then((product) => {
       if (!product) {
         return res.redirect("/");
       }
-
       res.render("admin/edit-product", {
         pageTitle: "Edit product",
         path: "/admin/edit-product",
@@ -130,7 +133,10 @@ const postEditProduct = (req, res, next) => {
   const updatedPrice = req.body.price;
   const image = req.file;
   const updatedDescription = req.body.description;
+
   const errors = validationResult(req);
+
+  //Has error
   if (!errors.isEmpty()) {
     console.log(errors.array());
     return res.status(422).render("admin/edit-product", {
@@ -149,6 +155,8 @@ const postEditProduct = (req, res, next) => {
       validationErrors: errors.array(),
     });
   }
+  
+  //Fetching the product
   Product.findById(prodId)
     .then((product) => {
       if (product.userId.toString() !== req.user._id.toString()) {
