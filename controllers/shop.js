@@ -3,20 +3,27 @@ import Order from "../model/order.js";
 import fs from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
+import Stripe from "stripe";
 
-const ITEMS_PER_PAGE = 1;
+const ITEMS_PER_PAGE = 2;
+
+//Using stripe for payment
+const stripe = new Stripe(
+  "sk_test_51NuVpYIqCjXnXp2Dqco2GtZf4dg3HW1sKi4hckyDugZx2uv24e1TnwIGnpxKngDjmTtQgoGyobiJzwGR1ZdjclDv00h42sqjvJ"
+);
 
 const getProducts = (req, res, next) => {
   const page = +req.query.page || 1;
   let totalItems;
 
+  //Pagination
   Product.find()
     .countDocuments()
     .then((numProducts) => {
       totalItems = numProducts;
       return Product.find()
-        .skip((page - 1) * ITEMS_PER_PAGE)
-        .limit(ITEMS_PER_PAGE);
+        .skip((page - 1) * ITEMS_PER_PAGE) //Skip pre elements
+        .limit(ITEMS_PER_PAGE); //Skip post elements
     })
     .then((products) => {
       res.render("shop/product-list", {
@@ -72,7 +79,7 @@ const getIndex = (req, res, next) => {
 
 const getCart = (req, res, next) => {
   req.user
-    .populate("cart.items.productId")
+    .populate("cart.items.productId")//Fetching a user based on cart.items.productId
     .then((user) => {
       const products = user.cart.items;
       res.render("shop/cart", {
@@ -105,10 +112,53 @@ const getOrders = (req, res, next) => {
 };
 
 const getCheckout = (req, res, next) => {
-  res.render("shop/checkout", {
-    pageTitle: "Checkout",
-    path: "/checkout",
-  });
+  let products;
+  let total = 0;
+  req.user
+    .populate("cart.items.productId")
+    .then((user) => {
+      products = user.cart.items;
+      total = 0;
+      products.forEach((p) => {
+        total += p.quantity * p.productId.price;
+      });
+
+      //Stripe document
+      return stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: products.map((p) => {
+          return {
+            price_data: {
+              currency: "usd",
+              unit_amount: p.productId.price * 100,
+              product_data: {
+                name: p.productId.title,
+                description: p.productId.description,
+              },
+            },
+            quantity: p.quantity,
+          };
+        }),
+        mode: "payment",
+        success_url:
+          req.protocol + "://" + req.get("host") + "/checkout/success",
+        cancel_url: req.protocol + "://" + req.get("host") + "/checkout/cancel",
+      });
+    })
+    .then((session) => {
+      res.render("shop/checkout", {
+        pageTitle: "Checkout",
+        path: "/checkout",
+        products: products,
+        totalSum: total,
+        sessionId: session.id,
+      });
+    })
+    .catch((err) => {
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
+    });
 };
 
 const getProduct = (req, res, next) => {
@@ -154,7 +204,7 @@ const postCartDeleteProduct = (req, res, next) => {
     });
 };
 
-const postOrder = (req, res, next) => {
+const getCheckoutSuccess = (req, res, next) => {
   req.user
     .populate("cart.items.productId")
     .then((user) => {
@@ -196,6 +246,7 @@ const getInvoice = (req, res, next) => {
       const invoiceName = "invoice-" + orderId + ".pdf";
       const invoicePath = path.join("data", "invoices", invoiceName);
 
+      //Creating a pdf document
       const pdfDoc = new PDFDocument();
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
@@ -228,20 +279,6 @@ const getInvoice = (req, res, next) => {
       pdfDoc.fontSize().text("Total Price: $" + totalPrice);
 
       pdfDoc.end();
-      // fs.readFile(invoicePath, (err, data) => {
-      //   if (err) {
-      //     return next(err);
-      //   }
-      //   res.setHeader("Content-Type", "application/pdf");
-      //   res.setHeader(
-      //     "Content-Disposition",
-      //     'inline; filename="' + invoiceName + '"'
-      //   );
-      //   res.send(data);
-      // });
-      // const file = fs.createReadStream(invoicePath);
-
-      // file.pipe(res);
     })
     .catch((err) => next(err));
 };
@@ -255,6 +292,6 @@ export default {
   getProduct,
   postCart,
   postCartDeleteProduct,
-  postOrder,
+  getCheckoutSuccess,
   getInvoice,
 };

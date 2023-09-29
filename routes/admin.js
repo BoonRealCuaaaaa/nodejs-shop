@@ -6,7 +6,7 @@ import adminController from "../controllers/admin.js";
 import isAuth from "../middleware/is-auth.js";
 
 const router = express.Router();
-// console.log('Admin router')
+
 // [GET] /admin/add-product
 router.get("/add-product", isAuth, adminController.getAddProduct);
 
